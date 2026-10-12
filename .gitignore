@@ -1,0 +1,26 @@
+# Compiled
+target/
+*.class
+*.jar
+*.war
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+
+# Maven
+.mvn/timing.properties
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
