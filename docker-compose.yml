@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+
+  # --- Infrastructure ---
+
+  mysql-order:
+    image: mysql:8.0
+    container_name: mysql-order
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: order_service_db
+    ports:
+      - "3307:3306"
+
+  mysql-product:
+    image: mysql:8.0
+    container_name: mysql-product
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: product_service_db
+    ports:
+      - "3308:3306"
+
+  mysql-inventory:
+    image: mysql:8.0
+    container_name: mysql-inventory
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: inventory_service_db
+    ports:
+      - "3309:3306"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.0
+    container_name: keycloak
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8181:8080"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: zipkin
+    ports:
+      - "9411:9411"
+
+  # --- Spring Boot Services ---
+
+  discovery-server:
+    image: com.oros/discovery-server:latest
+    container_name: discovery-server
+    ports:
+      - "8761:8761"
+    depends_on:
+      - zipkin
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  api-gateway:
+    image: com.oros/api-gateway:latest
+    container_name: api-gateway
+    ports:
+      - "8222:8222"
+    depends_on:
+      - discovery-server
+      - keycloak
+      - zipkin
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  order-service:
+    image: com.oros/order-service:latest
+    container_name: order-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql-order
+      - kafka
+      - discovery-server
+      - zipkin
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  product-service:
+    image: com.oros/product-service:latest
+    container_name: product-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mysql-product
+      - discovery-server
+      - zipkin
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  inventory-service:
+    image: com.oros/inventory-service:latest
+    container_name: inventory-service
+    ports:
+      - "8083:8083"
+    depends_on:
+      - mysql-inventory
+      - kafka
+      - discovery-server
+      - zipkin
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+
+  notification-service:
+    image: com.oros/notificationservice:latest
+    container_name: notification-service
+    depends_on:
+      - kafka
+      - discovery-server
+      - zipkin
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
